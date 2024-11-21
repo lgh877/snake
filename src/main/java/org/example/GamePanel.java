@@ -3,25 +3,23 @@ package org.example;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.util.Random;
+//import java.util.Random;
 
 public class GamePanel extends JPanel implements ActionListener {
     static final int SCREEN_WIDTH = 600;
     static final int SCREEN_HEIGHT = 600;
     static final int UNIT_SIZE = 25;
-    static final int GAME_UNITS = (SCREEN_WIDTH*SCREEN_HEIGHT)/UNIT_SIZE;
-    static final int DELAY = 75;
-    final int x[] = new int[GAME_UNITS];
-    final int y[] = new int[GAME_UNITS];
-    int bodyParts = 6;
-    int applesEaten, appleX, appleY;
-    char direction = 'R';
-    boolean running = false;
-    Timer timer;
-    Random random;
-    GamePanel() {
-        random = new Random();
-        setPreferredSize(new Dimension(SCREEN_WIDTH,SCREEN_HEIGHT));
+    static final int DELAY = 25;
+
+    private SnakeHead snakeHead;
+    private SnakeBody snakeBody;
+    private Apple apple;
+    private boolean running = false;
+    private int applesEaten = 0;
+    private Timer timer;
+
+    public GamePanel() {
+        setPreferredSize(new Dimension(SCREEN_WIDTH, SCREEN_HEIGHT));
         setBackground(Color.black);
         setFocusable(true);
         addKeyListener(new MyKeyAdapter());
@@ -29,138 +27,100 @@ public class GamePanel extends JPanel implements ActionListener {
     }
 
     public void startGame() {
-        newApple();
+        Point startPosition = new Point(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
+        snakeHead = new SnakeHead(startPosition.x, startPosition.y, UNIT_SIZE);
+        snakeBody = new SnakeBody(6, UNIT_SIZE, startPosition, 0.25);
+        apple = new Apple(SCREEN_WIDTH, SCREEN_HEIGHT, UNIT_SIZE);
         running = true;
-        timer = new Timer(DELAY,this);
+        applesEaten = 0;
+        timer = new Timer(DELAY, this);
         timer.start();
     }
 
+    @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
-        draw(g);
-    }
-
-    public void draw(Graphics g) {
-        if(running) {
-            /*
-            for (int i = 0; i < SCREEN_HEIGHT / UNIT_SIZE; i++) {
-                g.drawLine(i * UNIT_SIZE, 0, i * UNIT_SIZE, SCREEN_HEIGHT);
-                g.drawLine(0, i * UNIT_SIZE, SCREEN_WIDTH, i * UNIT_SIZE);
-            }
-            */
-            g.setColor(Color.red);
-            g.fillOval(appleX, appleY, UNIT_SIZE, UNIT_SIZE);
-            for (int i = 0; i < bodyParts; i++) {
-                if (i == 0) {
-                    g.setColor(Color.green);
-                    g.fillRect(x[i], y[i], UNIT_SIZE, UNIT_SIZE);
-                } else {
-                    g.setColor(new Color(45, 180, 0));
-                    g.setColor(new Color(random.nextInt(255),random.nextInt(255),random.nextInt(255)));
-                    g.fillRect(x[i], y[i], UNIT_SIZE, UNIT_SIZE);
-                }
-            }
-            g.setColor(Color.red);
-            g.setFont(new Font("Ink Free",Font.BOLD,40));
-            FontMetrics metrics = getFontMetrics(g.getFont());
-            g.drawString("Score: " + applesEaten,(SCREEN_WIDTH-metrics.stringWidth("Score: " + applesEaten))/2, g.getFont().getSize());
-        }
-        else{
+        if (running) {
+            apple.draw(g);
+            snakeBody.draw(g);
+            snakeHead.draw(g);
+            drawScore(g);
+        } else {
             gameOver(g);
         }
     }
-    public void newApple(){
-        appleX = random.nextInt(SCREEN_WIDTH/UNIT_SIZE)*UNIT_SIZE;
-        appleY = random.nextInt(SCREEN_HEIGHT/UNIT_SIZE)*UNIT_SIZE;
-    }
-    public void move() {
-        for(int i=bodyParts;i>0;i--){
-            x[i] = x[i-1];
-            y[i] = y[i-1];
-        }
-        switch(direction){
-            case 'U':
-                y[0] -=UNIT_SIZE;
-                break;
-            case 'D':
-                y[0] +=UNIT_SIZE;
-                break;
-            case 'L':
-                x[0] -=UNIT_SIZE;
-                break;
-            case 'R':
-                x[0] +=UNIT_SIZE;
-                break;
-        }
+
+    private void drawScore(Graphics g) {
+        g.setColor(Color.red);
+        g.setFont(new Font("Ink Free", Font.BOLD, 40));
+        FontMetrics metrics = getFontMetrics(g.getFont());
+        g.drawString("Score: " + applesEaten, (SCREEN_WIDTH - metrics.stringWidth("Score: " + applesEaten)) / 2, g.getFont().getSize());
     }
 
-    public void checkApple() {
-        if((x[0]==appleX)&&(y[0]==appleY)){
-            bodyParts++;
-            applesEaten++;
-            newApple();
-        }
-    }
+    private void gameOver(Graphics g) {
+        g.setColor(Color.red);
+        g.setFont(new Font("Ink Free", Font.BOLD, 75));
+        FontMetrics metrics = getFontMetrics(g.getFont());
+        g.drawString("Game Over", (SCREEN_WIDTH - metrics.stringWidth("Game Over")) / 2, SCREEN_HEIGHT / 2);
 
-    public void checkCollisions() {
-        for(int i=bodyParts;i>0;i--){
-            if ((x[0] == x[i])&&(y[0]==y[i])) {
+        g.setFont(new Font("Ink Free", Font.BOLD, 40));
+        FontMetrics metrics1 = getFontMetrics(g.getFont());
+        g.drawString("Score: " + applesEaten, (SCREEN_WIDTH - metrics1.stringWidth("Score: " + applesEaten)) / 2, SCREEN_HEIGHT / 2 + 50);
+    }
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        if (running) {
+            snakeHead.move();
+            snakeBody.move(snakeHead.getPosition());
+    
+            // Apple과 SnakeHead의 히트박스 충돌 여부 확인
+            if (snakeHead.getHitBox().intersects(apple.getHitBox())) {
+                snakeBody.grow();
+                applesEaten++;
+                apple.spawn();
+            }
+    
+            // 게임오버 조건: 머리와 몸통 충돌 혹은 머리가 벽에 충돌
+            if (checkGameOver()) {
                 running = false;
             }
         }
-        if(x[0]<0){
-            running = false;
-        }
-        if(x[0]>SCREEN_WIDTH){
-            running = false;
-        }
-        if(y[0]<0){
-            running = false;
-        }
-        if(y[0]>SCREEN_HEIGHT){
-            running = false;
-        }
-        if(!running) timer.stop();
-    }
-
-    public void gameOver(Graphics g) {
-        g.setColor(Color.red);
-        g.setFont(new Font("Ink Free",Font.BOLD,40));
-        FontMetrics metrics1 = getFontMetrics(g.getFont());
-        g.drawString("Score: " + applesEaten,(SCREEN_WIDTH-metrics1.stringWidth("Score: " + applesEaten))/2, g.getFont().getSize());
-
-        g.setColor(Color.red);
-        g.setFont(new Font("Ink Free",Font.BOLD,75));
-        FontMetrics metrics = getFontMetrics(g.getFont());
-        g.drawString("Game Over",(SCREEN_WIDTH-metrics.stringWidth("Game Over"))/2, SCREEN_HEIGHT/2);
-    }
-
-    @Override
-    public void actionPerformed(ActionEvent e) {
-        if(running){
-            move();
-            checkApple();
-            checkCollisions();
-        }
         repaint();
     }
-    public class MyKeyAdapter extends KeyAdapter {
+    
+    private boolean checkGameOver() {
+        // 1. 머리와 몸통 충돌
+        if (snakeBody.checkCollision(snakeHead.getHitBox())) {
+            return true;
+        }
+    
+        // 2. 머리가 벽에 충돌
+        Point headPosition = snakeHead.getPosition();
+        if (headPosition.x < 0 || headPosition.x >= SCREEN_WIDTH ||
+            headPosition.y < 0 || headPosition.y >= SCREEN_HEIGHT) {
+            return true;
+        }
+    
+        return false; // 아무 충돌도 발생하지 않음
+    }
+    
+    private class MyKeyAdapter extends KeyAdapter {
         @Override
-        public void keyPressed(KeyEvent e){
-            switch(e.getKeyCode()){
-                case KeyEvent.VK_LEFT:
-                    if(direction!='R') direction='L';
-                    break;
-                case KeyEvent.VK_RIGHT:
-                    if(direction!='L') direction='R';
-                    break;
-                case KeyEvent.VK_UP:
-                    if(direction!='D') direction='U';
-                    break;
-                case  KeyEvent.VK_DOWN:
-                    if(direction!='U') direction='D';
-                    break;
+        public void keyPressed(KeyEvent e) {
+            switch (e.getKeyCode()) {
+                //case KeyEvent.VK_LEFT:
+                //    snakeHead.setDirection('L');
+                //    break;
+                //case KeyEvent.VK_RIGHT: 
+                //    snakeHead.setDirection('R');
+                //    break;
+                case KeyEvent.VK_UP -> snakeHead.setDirection('U');
+                case KeyEvent.VK_DOWN -> snakeHead.setDirection('D');
             }
+        }
+        @Override
+        public void keyReleased(KeyEvent e) {
+            snakeHead.setDirection('N');
         }
     }
 }
